@@ -16,16 +16,33 @@ async function loadSmartClient(): Promise<SmartModule> {
 
 export function SmartFhirLaunch() {
   const config = useMemo(() => getSmartLaunchConfig(), []);
+  const [clientId, setClientId] = useState(config.clientId);
   const [issuer, setIssuer] = useState(config.issuer);
+  const [scope, setScope] = useState(config.scope);
   const [launchContext, setLaunchContext] = useState("");
   const [launchMode, setLaunchMode] = useState<"ehr" | "standalone">("standalone");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
+    const savedClientId = window.localStorage.getItem("smart-client-id");
+    const savedIssuer = window.localStorage.getItem("smart-issuer");
+    const savedScope = window.localStorage.getItem("smart-scope");
     const params = new URLSearchParams(window.location.search);
     const launchIssuer = params.get("iss");
     const launchToken = params.get("launch");
+
+    if (savedClientId) {
+      setClientId(savedClientId);
+    }
+
+    if (savedIssuer) {
+      setIssuer(savedIssuer);
+    }
+
+    if (savedScope) {
+      setScope(savedScope);
+    }
 
     if (launchIssuer) {
       setIssuer(launchIssuer);
@@ -42,20 +59,24 @@ export function SmartFhirLaunch() {
 
     startTransition(async () => {
       try {
-        if (!config.clientId) {
-          throw new Error("Missing NEXT_PUBLIC_SMART_CLIENT_ID.");
+        if (!clientId) {
+          throw new Error("Please enter a SMART client ID.");
         }
 
         if (!issuer) {
           throw new Error("Add a FHIR base URL or launch with iss from the EHR.");
         }
 
+        window.localStorage.setItem("smart-client-id", clientId);
+        window.localStorage.setItem("smart-issuer", issuer);
+        window.localStorage.setItem("smart-scope", scope);
+
         const SMART = await loadSmartClient();
         const redirectUri = buildSmartRedirectUri(window.location.origin);
 
         await SMART.oauth2.authorize({
-          clientId: config.clientId,
-          scope: config.scope,
+          clientId,
+          scope,
           redirectUri,
           iss: issuer,
           launch: launchContext || undefined,
@@ -84,11 +105,31 @@ export function SmartFhirLaunch() {
 
         <div className="mt-8 grid gap-4">
           <label className="grid gap-2 text-sm font-medium text-slate-700">
+            SMART client ID
+            <input
+              value={clientId}
+              onChange={(event) => setClientId(event.target.value)}
+              placeholder="my-smart-app"
+              className="rounded-2xl border border-[color:var(--color-line)] bg-[color:var(--color-panel-soft)] px-4 py-3 outline-none transition focus:border-cyan-500"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
             FHIR issuer
             <input
               value={issuer}
               onChange={(event) => setIssuer(event.target.value)}
               placeholder="https://launch.smarthealthit.org/v/r4/fhir"
+              className="rounded-2xl border border-[color:var(--color-line)] bg-[color:var(--color-panel-soft)] px-4 py-3 outline-none transition focus:border-cyan-500"
+            />
+          </label>
+
+          <label className="grid gap-2 text-sm font-medium text-slate-700">
+            Scope
+            <input
+              value={scope}
+              onChange={(event) => setScope(event.target.value)}
+              placeholder="launch/patient openid fhirUser patient/*.read user/*.read"
               className="rounded-2xl border border-[color:var(--color-line)] bg-[color:var(--color-panel-soft)] px-4 py-3 outline-none transition focus:border-cyan-500"
             />
           </label>
@@ -127,17 +168,17 @@ export function SmartFhirLaunch() {
           </p>
           <div className="mt-4 grid gap-4">
             <StatusRow label="Mode" value={launchMode === "ehr" ? "EHR launch" : "Standalone launch"} />
-            <StatusRow label="Client ID" value={config.clientId || "Not configured"} />
+            <StatusRow label="Client ID" value={clientId || "Not configured"} />
             <StatusRow label="Redirect path" value={config.redirectPath} />
           </div>
         </div>
 
         <div className="rounded-[2rem] border border-[color:var(--color-line)] bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-            Default scope
+            Active scope
           </p>
           <p className="mt-3 rounded-2xl bg-[color:var(--color-panel-soft)] px-4 py-3 font-mono text-xs leading-6 text-slate-700">
-            {config.scope}
+            {scope}
           </p>
           <p className="mt-4 text-sm leading-7 text-slate-600">
             For standalone testing, the SMART Health IT sandbox works well. For EHR launch, pass
